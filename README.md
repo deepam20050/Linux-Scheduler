@@ -1,7 +1,7 @@
 # Linux Scheduler
  Modified the Linux kernel ([linux-5.14.3](https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.14.3.tar.xz)) in a way to 
 1. Induce a user defined delay for a selected process everytime this selected process is chosen by the linux scheduler
-2. And, for processes with same nice value as the above selected process log their timestamps when they are first selected by the linux scheduler and dispatched to run.
+2. And, for processes with the same nice value as the above selected process log their timestamps when they are first selected by the linux scheduler and dispatched to run.
 
 ### To patch :
 + `patch -p1 -i deepam20050_patch.patch` then type the following in order
