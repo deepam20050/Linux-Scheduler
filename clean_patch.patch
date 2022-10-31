@@ -1,0 +1,101 @@
+diff -cr linux-5.14.3/arch/x86/entry/syscalls/syscall_64.tbl modified/arch/x86/entry/syscalls/syscall_64.tbl
+*** linux-5.14.3/arch/x86/entry/syscalls/syscall_64.tbl	Sun Sep 12 12:31:00 2021
+--- modified/arch/x86/entry/syscalls/syscall_64.tbl	Tue Dec 14 23:57:20 2021
+***************
+*** 414,416 ****
+--- 414,418 ----
+  547	x32	pwritev2		compat_sys_pwritev64v2
+  # This is the end of the legacy x32 range.  Numbers 548 and above are
+  # not special and are not to be used for x32-specific syscalls.
++ 548	common	change_vruntime		sys_change_vruntime
++ 549	common	print_nice_log		sys_print_nice_log
+diff -cr linux-5.14.3/include/linux/sched.h modified/include/linux/sched.h
+*** linux-5.14.3/include/linux/sched.h	Sun Sep 12 12:31:00 2021
+--- modified/include/linux/sched.h	Mon Dec 13 23:03:25 2021
+***************
+*** 475,480 ****
+--- 475,481 ----
+  	u64				prev_sum_exec_runtime;
+  
+  	u64				nr_migrations;
++ 	u64				add_vruntime;
+  
+  	struct sched_statistics		statistics;
+  
+diff -cr linux-5.14.3/kernel/sched/core.c modified/kernel/sched/core.c
+*** linux-5.14.3/kernel/sched/core.c	Sun Sep 12 12:31:00 2021
+--- modified/kernel/sched/core.c	Mon Dec 13 23:05:03 2021
+***************
+*** 3943,3948 ****
+--- 3943,3949 ----
+  	p->se.prev_sum_exec_runtime	= 0;
+  	p->se.nr_migrations		= 0;
+  	p->se.vruntime			= 0;
++ 	p->se.add_vruntime		= 0;
+  	INIT_LIST_HEAD(&p->se.group_node);
+  
+  #ifdef CONFIG_FAIR_GROUP_SCHED
+diff -cr linux-5.14.3/kernel/sched/fair.c modified/kernel/sched/fair.c
+*** linux-5.14.3/kernel/sched/fair.c	Sun Sep 12 12:31:00 2021
+--- modified/kernel/sched/fair.c	Mon Dec 13 23:07:53 2021
+***************
+*** 811,817 ****
+  	curr->sum_exec_runtime += delta_exec;
+  	schedstat_add(cfs_rq->exec_clock, delta_exec);
+  
+! 	curr->vruntime += calc_delta_fair(delta_exec, curr);
+  	update_min_vruntime(cfs_rq);
+  
+  	if (entity_is_task(curr)) {
+--- 811,817 ----
+  	curr->sum_exec_runtime += delta_exec;
+  	schedstat_add(cfs_rq->exec_clock, delta_exec);
+  
+! 	curr->vruntime += calc_delta_fair(delta_exec, curr) + curr->add_vruntime;
+  	update_min_vruntime(cfs_rq);
+  
+  	if (entity_is_task(curr)) {
+diff -cr linux-5.14.3/kernel/sys.c modified/kernel/sys.c
+*** linux-5.14.3/kernel/sys.c	Sun Sep 12 12:31:00 2021
+--- modified/kernel/sys.c	Tue Dec 14 23:58:53 2021
+***************
+*** 2654,2659 ****
+--- 2654,2691 ----
+  	return 0;
+  }
+  
++ SYSCALL_DEFINE1(print_nice_log, int, nice_val)
++ {
++ 	struct task_struct *curr = NULL;
++ 	struct task_struct *my_print = NULL;
++ 	printk(KERN_INFO "LOG");
++ 	for_each_process(curr) {
++ 		if (task_nice(curr) == nice_val) {
++ 			my_print = curr;
++ 			printk(KERN_INFO "PID= %d, Selected time= %lld\n", task_pid_nr(curr), my_print->se.exec_start);
++ 		}
++ 	}
++ 	return 0;
++ }
++ 
++ SYSCALL_DEFINE2(change_vruntime, int, curr_pid, s64, add_delay)
++ {
++ 	struct task_struct *curr_process = NULL;
++ 	struct task_struct *demo_process = NULL;
++ 	if (curr_pid <= 0) return -EINVAL;
++ 	for_each_process(demo_process) {
++ 		if (task_pid_nr(demo_process) == curr_pid) {
++ 			curr_process = demo_process;
++ 			break;
++ 		}
++ 	}
++ 	if (curr_process == NULL) return -EINVAL;
++ 	curr_process->se.add_vruntime = add_delay;
++ 	curr_process->se.vruntime = add_delay;
++ 	printk(KERN_INFO "vruntime delay added\n");
++ 	return 0;
++ }
++ 
+  SYSCALL_DEFINE1(sysinfo, struct sysinfo __user *, info)
+  {
+  	struct sysinfo val;
